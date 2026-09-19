@@ -30,6 +30,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build static site
+        env:
+          VITE_API_BASE_URL: https://palistudio-eyen2ztd.manus.space
         run: pnpm exec vite build --base="/${{ github.event.repository.name }}/"
       - name: Disable Jekyll processing
         run: touch dist/public/.nojekyll
