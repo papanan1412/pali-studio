@@ -359,3 +359,10 @@ button { border: 0; }
 @media (max-width: 560px) { .account-create { grid-template-columns: 1fr; } .account-create-title { grid-column: auto; } }
 
 .guest-progress-note { max-width: 300px; margin: 10px 0 18px; color: #b8c6d1; font-size: 11px; line-height: 1.6; }
+
+.contact-field { position: relative; }
+.contact-field input { padding-right: 38px; }
+.contact-field > svg { position: absolute; top: 50%; right: 13px; transform: translateY(-50%); color: #8e918c; pointer-events: none; }
+.remember-row { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 8px !important; color: #73786f !important; cursor: pointer; }
+.remember-row input { width: 15px !important; height: 15px; accent-color: var(--navy); }
+.remember-row span { display: inline-flex !important; align-items: center; gap: 5px; }

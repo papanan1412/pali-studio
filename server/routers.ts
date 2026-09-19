@@ -4,7 +4,7 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { createHomework, createLocalUser, getDashboardSummary, getLessonById, getTeacherDashboard, getUserByEmail, getUserByOpenId, gradeHomework, listCourses, listLessons, listStudentHomework, listTeacherHomework, listUsersForAdmin, localOpenId, normalizePali, saveProgress, searchDictionary, setLocalPassword, updateLessonMedia, updateUserRole, upsertUser } from "./db";
+import { createHomework, createLocalUser, getDashboardSummary, getLessonById, getTeacherDashboard, getUserByEmail, getUserByIdentifier, getUserByOpenId, gradeHomework, listCourses, listLessons, listStudentHomework, listTeacherHomework, listUsersForAdmin, localOpenId, normalizePali, normalizePhone, saveProgress, searchDictionary, setLocalContactPassword, setLocalPassword, updateLessonMedia, updateUserRole, upsertUser } from "./db";
 import { storagePut } from "./storage";
 import { hashPassword, verifyPassword } from "./password";
 import { sdk } from "./_core/sdk";
@@ -24,24 +24,24 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user ? publicUser(opts.ctx.user) : null),
-    register: publicProcedure.input(z.object({ name: z.string().min(2).max(100), email: z.string().email().max(320), password: z.string().min(8).max(128) })).mutation(async ({ ctx, input }) => {
-      const email = input.email.trim().toLowerCase();
+    register: publicProcedure.input(z.object({ name: z.string().min(2).max(100), email: z.string().email().max(320).optional(), phone: z.string().regex(/^(\+?66|0)[0-9]{8,10}$/).optional(), password: z.string().min(8).max(128), remember: z.boolean().default(true) }).refine(input => Boolean(input.email || input.phone), { message: "กรุณากรอกอีเมลหรือเบอร์โทรศัพท์" })).mutation(async ({ ctx, input }) => {
+      const identifier = input.email?.trim().toLowerCase() || normalizePhone(input.phone || "");
       const passwordHash = await hashPassword(input.password);
-      const existing = await getUserByEmail(email);
-      if (existing?.passwordHash) throw new TRPCError({ code: "CONFLICT", message: "อีเมลนี้มีบัญชีอยู่แล้ว" });
-      const id = existing ? existing.id : await createLocalUser({ name: input.name, email, passwordHash });
-      if (existing) await setLocalPassword(email, passwordHash, input.name);
-      const user = existing ? await getUserByOpenId(existing.openId) : await getUserByOpenId(localOpenId(email));
+      const existing = await getUserByIdentifier(identifier);
+      if (existing?.passwordHash) throw new TRPCError({ code: "CONFLICT", message: "อีเมลหรือเบอร์นี้มีบัญชีอยู่แล้ว" });
+      const id = existing ? existing.id : await createLocalUser({ name: input.name, email: input.email, phone: input.phone, passwordHash });
+      if (existing) await setLocalContactPassword(identifier, passwordHash, input.name);
+      const user = existing ? await getUserByOpenId(existing.openId) : await getUserByOpenId(localOpenId(identifier));
       if (!id || !user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "สร้างบัญชีไม่สำเร็จ" });
       const token = await sdk.signSession({ openId: user.openId, appId: ENV.appId, name: user.name || input.name });
-      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: ONE_YEAR_MS });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), ...(input.remember ? { maxAge: ONE_YEAR_MS } : {}) });
       return publicUser(user);
     }),
-    login: publicProcedure.input(z.object({ email: z.string().email().max(320), password: z.string().min(8).max(128) })).mutation(async ({ ctx, input }) => {
-      const user = await getUserByEmail(input.email.trim().toLowerCase());
-      if (!user?.passwordHash || !(await verifyPassword(input.password, user.passwordHash))) throw new TRPCError({ code: "UNAUTHORIZED", message: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" });
-      const token = await sdk.signSession({ openId: user.openId, appId: ENV.appId, name: user.name || input.email });
-      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: ONE_YEAR_MS });
+    login: publicProcedure.input(z.object({ identifier: z.string().min(3).max(320), password: z.string().min(8).max(128), remember: z.boolean().default(true) })).mutation(async ({ ctx, input }) => {
+      const user = await getUserByIdentifier(input.identifier);
+      if (!user?.passwordHash || !(await verifyPassword(input.password, user.passwordHash))) throw new TRPCError({ code: "UNAUTHORIZED", message: "อีเมลหรือเบอร์โทรศัพท์ หรือรหัสผ่านไม่ถูกต้อง" });
+      const token = await sdk.signSession({ openId: user.openId, appId: ENV.appId, name: user.name || input.identifier });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), ...(input.remember ? { maxAge: ONE_YEAR_MS } : {}) });
       return publicUser(user);
     }),
     logout: publicProcedure.mutation(({ ctx }) => {

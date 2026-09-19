@@ -63,6 +63,17 @@ export function localOpenId(email: string) {
   return `local_${createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 56)}`;
 }
 
+export function normalizePhone(phone: string) {
+  const compact = phone.trim().replace(/[\s().-]/g, "");
+  if (compact.startsWith("+66")) return `0${compact.slice(3)}`;
+  if (compact.startsWith("66")) return `0${compact.slice(2)}`;
+  return compact;
+}
+
+export function isEmailIdentifier(identifier: string) {
+  return identifier.includes("@");
+}
+
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;
@@ -70,11 +81,20 @@ export async function getUserByEmail(email: string) {
   return result[0];
 }
 
-export async function createLocalUser(input: { name: string; email: string; passwordHash: string; role?: "user" | "teacher" | "admin" | "owner" }) {
+export async function getUserByIdentifier(identifier: string) {
+  const value = identifier.trim();
+  if (isEmailIdentifier(value)) return getUserByEmail(value);
   const db = await getDb();
   if (!db) return undefined;
-  const existing = await db.select({ id: users.id }).from(users).limit(1);
-  const [created] = await db.insert(users).values({ openId: localOpenId(input.email), name: input.name.trim(), email: input.email.trim().toLowerCase(), passwordHash: input.passwordHash, loginMethod: "email", role: input.role || (existing.length === 0 ? "owner" : "user") }).$returningId();
+  const result = await db.select().from(users).where(eq(users.phone, normalizePhone(value))).limit(1);
+  return result[0];
+}
+
+export async function createLocalUser(input: { name: string; email?: string; phone?: string; passwordHash: string; role?: "user" | "teacher" | "admin" | "owner" }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const contact = input.email?.trim().toLowerCase() || normalizePhone(input.phone || "");
+  const [created] = await db.insert(users).values({ openId: localOpenId(contact), name: input.name.trim(), email: input.email?.trim().toLowerCase() || null, phone: input.phone ? normalizePhone(input.phone) : null, passwordHash: input.passwordHash, loginMethod: input.email ? "email" : "phone", role: input.role || "user" }).$returningId();
   return created?.id;
 }
 
@@ -82,6 +102,13 @@ export async function setLocalPassword(email: string, passwordHash: string, name
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ passwordHash, name: name.trim(), loginMethod: "email" }).where(eq(users.email, email.trim().toLowerCase()));
+}
+
+export async function setLocalContactPassword(identifier: string, passwordHash: string, name: string) {
+  const db = await getDb();
+  if (!db) return;
+  const field = isEmailIdentifier(identifier) ? eq(users.email, identifier.trim().toLowerCase()) : eq(users.phone, normalizePhone(identifier));
+  await db.update(users).set({ passwordHash, name: name.trim(), loginMethod: isEmailIdentifier(identifier) ? "email" : "phone" }).where(field);
 }
 
 const seedCourses = [

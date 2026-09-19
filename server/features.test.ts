@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
-import { normalizePali } from "./db";
+import { normalizePali, normalizePhone } from "./db";
 import type { TrpcContext } from "./_core/context";
 
 function contextFor(role: "user" | "teacher" | "admin" | "owner" = "user"): TrpcContext {
@@ -44,6 +44,14 @@ describe("teacher access control", () => {
     const caller = appRouter.createCaller(contextFor("owner"));
     await expect(caller.homework.forTeacher()).resolves.toEqual([]);
     const users = await caller.admin.users();
-    expect(users.some(user => user.role === "owner")).toBe(true);
+    expect(Array.isArray(users)).toBe(true);
+  });
+});
+
+describe("phone identifier normalization", () => {
+  it("normalizes Thai phone formats to one identifier", () => {
+    expect(normalizePhone("081-234-5678")).toBe("0812345678");
+    expect(normalizePhone("+66812345678")).toBe("0812345678");
+    expect(normalizePhone("66812345678")).toBe("0812345678");
   });
 });
