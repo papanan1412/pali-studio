@@ -70,11 +70,11 @@ export async function getUserByEmail(email: string) {
   return result[0];
 }
 
-export async function createLocalUser(input: { name: string; email: string; passwordHash: string }) {
+export async function createLocalUser(input: { name: string; email: string; passwordHash: string; role?: "user" | "teacher" | "admin" | "owner" }) {
   const db = await getDb();
   if (!db) return undefined;
   const existing = await db.select({ id: users.id }).from(users).limit(1);
-  const [created] = await db.insert(users).values({ openId: localOpenId(input.email), name: input.name.trim(), email: input.email.trim().toLowerCase(), passwordHash: input.passwordHash, loginMethod: "email", role: existing.length === 0 ? "admin" : "user" }).$returningId();
+  const [created] = await db.insert(users).values({ openId: localOpenId(input.email), name: input.name.trim(), email: input.email.trim().toLowerCase(), passwordHash: input.passwordHash, loginMethod: "email", role: input.role || (existing.length === 0 ? "owner" : "user") }).$returningId();
   return created?.id;
 }
 
@@ -197,15 +197,17 @@ export async function searchDictionary(query: string) {
 
 export async function getDashboardSummary(userId: number, role: string) {
   const db = await getDb();
-  if (!db) return { role, totalLessons: 0, completedLessons: 0, avgProgress: 0, homeworkPending: 0, weeklyMinutes: 0, progress: [], pendingForTeacher: 0, gradedThisWeek: 0 };
+  if (!db) return { role, totalLessons: 0, completedLessons: 0, avgProgress: 0, averageScore: 0, homeworkPending: 0, weeklyMinutes: 0, progress: [], pendingForTeacher: 0, gradedThisWeek: 0 };
   await ensureCatalogSeed();
   const lessonCount = await db.select({ total: count() }).from(lessons).where(eq(lessons.isPublished, true));
   const progressRows = await db.select({ lessonId: lessonProgress.lessonId, progressPercent: lessonProgress.progressPercent, minutesWatched: lessonProgress.minutesWatched }).from(lessonProgress).where(eq(lessonProgress.userId, userId));
-  const homeworkRows = await db.select({ status: homeworkSubmissions.status }).from(homeworkSubmissions).where(eq(homeworkSubmissions.studentId, userId));
+  const homeworkRows = await db.select({ status: homeworkSubmissions.status, score: homeworkSubmissions.score }).from(homeworkSubmissions).where(eq(homeworkSubmissions.studentId, userId));
   const completedLessons = progressRows.filter(row => row.progressPercent >= 100).length;
   const avgProgress = progressRows.length ? Math.round(progressRows.reduce((sum, row) => sum + row.progressPercent, 0) / progressRows.length) : 0;
-  const pendingForTeacher = role === "teacher" || role === "admin" ? Number((await db.select({ total: count() }).from(homeworkSubmissions).where(eq(homeworkSubmissions.status, "pending")))[0]?.total ?? 0) : 0;
-  return { role, totalLessons: Number(lessonCount[0]?.total ?? 0), completedLessons, avgProgress, homeworkPending: homeworkRows.filter(row => row.status === "pending").length, weeklyMinutes: progressRows.reduce((sum, row) => sum + row.minutesWatched, 0), progress: progressRows, pendingForTeacher, gradedThisWeek: homeworkRows.filter(row => row.status === "graded").length };
+  const pendingForTeacher = role === "teacher" || role === "admin" || role === "owner" ? Number((await db.select({ total: count() }).from(homeworkSubmissions).where(eq(homeworkSubmissions.status, "pending")))[0]?.total ?? 0) : 0;
+  const scoredRows = homeworkRows.filter(row => row.score !== null && row.score !== undefined);
+  const averageScore = scoredRows.length ? Math.round((scoredRows.reduce((sum, row) => sum + Number(row.score), 0) / scoredRows.length) * 10) / 10 : 0;
+  return { role, totalLessons: Number(lessonCount[0]?.total ?? 0), completedLessons, avgProgress, averageScore, homeworkPending: homeworkRows.filter(row => row.status === "pending").length, weeklyMinutes: progressRows.reduce((sum, row) => sum + row.minutesWatched, 0), progress: progressRows, pendingForTeacher, gradedThisWeek: homeworkRows.filter(row => row.status === "graded").length };
 }
 
 export async function getTeacherDashboard() {
@@ -223,7 +225,7 @@ export async function listUsersForAdmin() {
   return db.select({ id: users.id, name: users.name, email: users.email, monasteryName: users.monasteryName, role: users.role, lastSignedIn: users.lastSignedIn }).from(users).orderBy(desc(users.lastSignedIn));
 }
 
-export async function updateUserRole(userId: number, role: "user" | "teacher" | "admin") {
+export async function updateUserRole(userId: number, role: "user" | "teacher" | "admin" | "owner") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ role }).where(eq(users.id, userId));

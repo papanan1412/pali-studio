@@ -11,7 +11,7 @@ import { sdk } from "./_core/sdk";
 import { ENV } from "./_core/env";
 
 const teacherProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "teacher" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "เฉพาะพระอาจารย์หรือผู้ดูแลระบบ" });
+  if (ctx.user.role !== "teacher" && ctx.user.role !== "admin" && ctx.user.role !== "owner") throw new TRPCError({ code: "FORBIDDEN", message: "เฉพาะพระอาจารย์หรือผู้ดูแลระบบ" });
   return next({ ctx });
 });
 
@@ -97,7 +97,14 @@ export const appRouter = router({
   }),
   admin: router({
     users: adminProcedure.query(() => listUsersForAdmin()),
-    setRole: adminProcedure.input(z.object({ userId: z.number(), role: z.enum(["user", "teacher", "admin"]) })).mutation(async ({ input }) => {
+    createTeacher: adminProcedure.input(z.object({ name: z.string().min(2).max(100), email: z.string().email().max(320), password: z.string().min(8).max(128) })).mutation(async ({ input }) => {
+      const email = input.email.trim().toLowerCase();
+      if (await getUserByEmail(email)) throw new TRPCError({ code: "CONFLICT", message: "อีเมลนี้มีบัญชีอยู่แล้ว" });
+      const id = await createLocalUser({ name: input.name, email, passwordHash: await hashPassword(input.password), role: "teacher" });
+      if (!id) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "สร้างบัญชีครูไม่สำเร็จ" });
+      return { success: true, id };
+    }),
+    setRole: adminProcedure.input(z.object({ userId: z.number(), role: z.enum(["user", "teacher", "admin", "owner"]) })).mutation(async ({ input }) => {
       await updateUserRole(input.userId, input.role);
       return { success: true };
     }),

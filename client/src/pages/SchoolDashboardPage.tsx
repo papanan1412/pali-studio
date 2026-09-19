@@ -8,8 +8,8 @@ const demoBars = [{ label: "วัดบวรฯ", value: 82 }, { label: "ว�
 
 export default function SchoolDashboardPage() {
   const { user } = useAuth();
-  const teacher = trpc.dashboard.teacher.useQuery(undefined, { enabled: user?.role === "teacher" || user?.role === "admin" });
-  const isTeacher = user?.role === "teacher" || user?.role === "admin";
+  const teacher = trpc.dashboard.teacher.useQuery(undefined, { enabled: user?.role === "teacher" || user?.role === "admin" || user?.role === "owner" });
+  const isTeacher = user?.role === "teacher" || user?.role === "admin" || user?.role === "owner";
   const metrics = teacher.data || { students: 24, pendingHomework: 8, gradedThisWeek: 41, averageScore: 8.2 };
   return <StudioPageFrame title="สำนักเรียน" eyebrow="ดูภาพรวมการเติบโตของผู้เรียน">
     {!user && <div className="auth-banner"><GraduationCap size={20} /><div><strong>แดชบอร์ดตัวอย่างสำหรับผู้ดูแลสำนักเรียน</strong><span>เข้าสู่ระบบเพื่อดูข้อมูลจริงของสำนักเรียนและรายงานรายบุคคล</span></div><button onClick={() => { window.location.href = "/login"; }}>เข้าสู่ระบบ</button></div>}

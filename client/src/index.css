@@ -350,3 +350,12 @@ button { border: 0; }
 .auth-banner button, .auth-banner a { padding: 8px 11px; border: 0; border-radius: 8px; background: var(--navy); color: #fff; font: inherit; font-size: 11px; text-decoration: none; cursor: pointer; }
 .auth-banner--soft { background: #fbf2df; }
 @media (max-width: 760px) { .login-page { display: block; } .login-art { min-height: 260px; padding: 24px; } .login-art-copy { margin: 35px 0 15px; } .login-art-copy h1 { font-size: 38px; } .login-pali { display: none; } .login-card-wrap { padding: 26px 20px 50px; } .login-back { margin-bottom: 28px; } .review-fields { grid-template-columns: 1fr; } .review-actions { justify-content: stretch; } .review-actions button { flex: 1; } }
+
+.account-create { display: grid; grid-template-columns: 1.1fr 1.2fr 1.1fr auto; gap: 8px; align-items: center; margin-bottom: 18px; padding: 12px; border: 1px dashed #d9c9a8; border-radius: 12px; background: #fbf6eb; }
+.account-create-title { display: inline-flex; align-items: center; gap: 7px; color: #8b642a; font-size: 11px; }
+.account-create input { min-width: 0; padding: 9px 10px; border: 1px solid #ded7c9; border-radius: 8px; background: #fff; color: var(--navy); font: inherit; font-size: 11px; }
+.account-create input:focus { outline: none; border-color: #c9a762; box-shadow: 0 0 0 3px rgba(215,154,52,.12); }
+@media (max-width: 900px) { .account-create { grid-template-columns: 1fr 1fr; } .account-create-title { grid-column: 1 / -1; } }
+@media (max-width: 560px) { .account-create { grid-template-columns: 1fr; } .account-create-title { grid-column: auto; } }
+
+.guest-progress-note { max-width: 300px; margin: 10px 0 18px; color: #b8c6d1; font-size: 11px; line-height: 1.6; }

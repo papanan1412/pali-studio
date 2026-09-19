@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 
 type SectionKey = "overview" | "courses" | "homework" | "progress";
 
@@ -114,6 +116,17 @@ function Home() {
   const [playing, setPlaying] = useState(false);
   const [paliWord, setPaliWord] = useState("พุทฺโธ");
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const summary = trpc.dashboard.summary.useQuery(undefined, { enabled: Boolean(user), retry: false });
+  const isSignedIn = Boolean(user);
+  const displayName = user?.name?.trim() || "ผู้เรียน";
+  const initials = displayName.slice(0, 2);
+  const progressPercent = isSignedIn ? summary.data?.avgProgress ?? 0 : 0;
+  const completedLessons = isSignedIn ? summary.data?.completedLessons ?? 0 : 0;
+  const totalLessons = isSignedIn ? summary.data?.totalLessons ?? 0 : 0;
+  const weeklyMinutes = isSignedIn ? summary.data?.weeklyMinutes ?? 0 : 0;
+  const homeworkPending = isSignedIn ? summary.data?.homeworkPending ?? 0 : 0;
+  const averageScore = isSignedIn ? summary.data?.averageScore ?? 0 : 0;
 
   const filteredLessons = useMemo(() => {
     const normalize = (value: string) => value.replace(/[ฺํ]/g, "").toLowerCase();
@@ -151,12 +164,12 @@ function Home() {
         </div>
 
         <div className="student-card">
-          <div className="avatar avatar--large">ดน</div>
+          <div className="avatar avatar--large">{isSignedIn ? initials : "ป"}</div>
           <div className="student-copy">
-            <strong>พระมหาดนัย</strong>
-            <span>วัดบวรนิเวศวิหาร</span>
+            <strong>{isSignedIn ? displayName : "ยินดีต้อนรับ"}</strong>
+            <span>{isSignedIn ? user?.monasteryName || "ผู้เรียนปาลีสตูดิโอ" : "เข้าสู่ระบบเพื่อเริ่มเรียน"}</span>
           </div>
-          <span className="online-dot" aria-label="ออนไลน์" />
+          {isSignedIn && <span className="online-dot" aria-label="ออนไลน์" />}
         </div>
 
         <nav className="side-nav" aria-label="เมนูหลัก">
@@ -204,9 +217,9 @@ function Home() {
               <span />
             </button>
             <div className="top-divider" />
-            <button className="profile-button" onClick={() => toast.info("โปรไฟล์ของพระมหาดนัย")}>
-              <div className="avatar">ดน</div>
-              <div className="profile-name"><strong>พระมหาดนัย</strong><span>ผู้เรียน</span></div>
+            <button className="profile-button" onClick={() => setLocation(isSignedIn ? "/profile" : "/login")}>
+              <div className="avatar">{isSignedIn ? initials : "ป"}</div>
+              <div className="profile-name"><strong>{isSignedIn ? displayName : "เข้าสู่ระบบ"}</strong><span>{isSignedIn ? (user?.role === "owner" ? "ผู้ดูแลหลัก" : user?.role === "teacher" ? "พระอาจารย์" : "ผู้เรียน") : "เพื่อบันทึกความคืบหน้า"}</span></div>
               <ChevronRight size={16} />
             </button>
           </div>
@@ -216,19 +229,19 @@ function Home() {
           <div className="welcome-row">
             <div>
               <p className="eyebrow eyebrow--warm">วันพฤหัสบดีที่ ๑๙ กันยายน ๒๕๖๙</p>
-              <h1>สวัสดีครับ <em>พระมหาดนัย</em></h1>
-              <p className="welcome-note">วันนี้มาเรียนต่ออีกนิด ให้ความรู้ค่อย ๆ งอกงามเหมือนต้นโพธิ์</p>
+              <h1>{isSignedIn ? <>สวัสดีครับ <em>{displayName}</em></> : <>ยินดีต้อนรับสู่ <em>ปาลีสตูดิโอ</em></>}</h1>
+              <p className="welcome-note">{isSignedIn ? "วันนี้มาเรียนต่ออีกนิด ให้ความรู้ค่อย ๆ งอกงามเหมือนต้นโพธิ์" : "เริ่มต้นเรียนบาลีอย่างมีจังหวะ และบันทึกความก้าวหน้าของคุณเมื่อเข้าสู่ระบบ"}</p>
             </div>
-            <div className="streak-chip"><Flame size={16} fill="currentColor" /><span><strong>๗ วัน</strong> เรียนต่อเนื่อง</span></div>
+            {isSignedIn && <div className="streak-chip"><Flame size={16} fill="currentColor" /><span><strong>กำลังเรียน</strong> ต่อเนื่อง</span></div>}
           </div>
 
           <section className="hero-card" aria-label="เรียนต่อจากเดิม">
             <div className="hero-copy">
-              <div className="hero-kicker"><span className="live-dot" /> กำลังเรียนอยู่</div>
-              <h2>คำที่ทำให้เห็น<br /><span>ความหมาย</span> ชัดขึ้น</h2>
+              <div className="hero-kicker"><span className="live-dot" /> {isSignedIn ? "กำลังเรียนอยู่" : "เส้นทางการเรียนของคุณ"}</div>
+              <h2>{isSignedIn ? <>คำที่ทำให้เห็น<br /><span>ความหมาย</span> ชัดขึ้น</> : <>เริ่มต้นค้นพบ<br /><span>ความหมาย</span> ของบาลี</>}</h2>
               <p>บทที่ ๐๔ · ไตรสรณคมน์</p>
-              <div className="hero-progress"><div className="progress-track"><div style={{ width: "68%" }} /></div><span>68%</span></div>
-              <button className="primary-button" onClick={handlePlay}><span className="button-icon">{playing ? <span className="pause-bars"><i /><i /></span> : <Play size={16} fill="currentColor" />}</span>{playing ? "กำลังเรียนอยู่" : "เรียนต่อจากเดิม"}<ArrowRight size={16} /></button>
+              {isSignedIn ? <div className="hero-progress"><div className="progress-track"><div style={{ width: `${progressPercent}%` }} /></div><span>{progressPercent}%</span></div> : <p className="guest-progress-note">เข้าสู่ระบบเพื่อบันทึกหลอดความคืบหน้าและคะแนนของคุณ</p>}
+              <button className="primary-button" onClick={isSignedIn ? handlePlay : () => setLocation("/login")}><span className="button-icon">{playing ? <span className="pause-bars"><i /><i /></span> : <Play size={16} fill="currentColor" />}</span>{isSignedIn ? (playing ? "กำลังเรียนอยู่" : "เรียนต่อจากเดิม") : "เข้าสู่ระบบเพื่อเริ่มเรียน"}<ArrowRight size={16} /></button>
             </div>
             <div className="hero-art" aria-hidden="true">
               <div className="art-orbit art-orbit--one" />
@@ -240,9 +253,9 @@ function Home() {
           </section>
 
           <section className="stats-grid" aria-label="สรุปการเรียน">
-            <div className="stat-card stat-card--plain"><div className="stat-icon stat-icon--saffron"><Clock3 size={18} /></div><div><span>เวลาเรียนสัปดาห์นี้</span><strong>๒ ชม. ๔๐ นาที</strong></div><span className="stat-trend">+๒๐%</span></div>
-            <div className="stat-card stat-card--plain"><div className="stat-icon stat-icon--teal"><BookOpen size={18} /></div><div><span>บทเรียนที่จบแล้ว</span><strong>๑๒ <small>/ ๓๖ บท</small></strong></div><span className="stat-trend stat-trend--muted">๑ คอร์ส</span></div>
-            <div className="stat-card stat-card--plain"><div className="stat-icon stat-icon--coral"><Target size={18} /></div><div><span>เป้าหมายเดือนนี้</span><strong>๖๘<small>% สำเร็จ</small></strong></div><span className="mini-ring"><span>68</span></span></div>
+            <div className="stat-card stat-card--plain"><div className="stat-icon stat-icon--saffron"><Clock3 size={18} /></div><div><span>เวลาเรียนสัปดาห์นี้</span><strong>{isSignedIn ? `${Math.floor(weeklyMinutes / 60)} ชม. ${weeklyMinutes % 60} นาที` : "—"}</strong></div><span className="stat-trend">{isSignedIn ? "บันทึกจริง" : "ล็อกอินก่อน"}</span></div>
+            <div className="stat-card stat-card--plain"><div className="stat-icon stat-icon--teal"><BookOpen size={18} /></div><div><span>บทเรียนที่จบแล้ว</span><strong>{isSignedIn ? completedLessons : "—"} <small>{isSignedIn ? `/ ${totalLessons} บท` : "เข้าสู่ระบบเพื่อดู"}</small></strong></div><span className="stat-trend stat-trend--muted">{isSignedIn ? "จากบัญชีคุณ" : "ข้อมูลส่วนตัว"}</span></div>
+            <div className="stat-card stat-card--plain"><div className="stat-icon stat-icon--coral"><Target size={18} /></div><div><span>คะแนนเฉลี่ยจากการบ้าน</span><strong>{isSignedIn && averageScore > 0 ? averageScore : "—"}<small>{isSignedIn && averageScore > 0 ? " / ๑๐ คะแนน" : "ยังไม่มีคะแนน"}</small></strong></div><span className="mini-ring"><span>{isSignedIn && averageScore > 0 ? averageScore : "—"}</span></span></div>
           </section>
 
           <div className="content-grid">
@@ -261,7 +274,7 @@ function Home() {
                       <div className="course-info">
                         <div className="course-meta"><span>{lesson.subtitle}</span><span><Clock3 size={13} /> {lesson.duration}</span></div>
                         <h3>{lesson.title}</h3>
-                        <div className="course-footer"><div className="tiny-progress"><div style={{ width: `${lesson.progress}%` }} /></div><span>{lesson.progress}%</span><button className="round-arrow" onClick={() => toast.success(`เปิดบทเรียน “${lesson.title}” แล้ว`)} aria-label={`เปิด ${lesson.title}`}><ArrowRight size={16} /></button></div>
+                        <div className="course-footer"><div className="tiny-progress"><div style={{ width: `${isSignedIn ? lesson.progress : 0}%` }} /></div><span>{isSignedIn ? `${lesson.progress}%` : "เริ่มเรียน"}</span><button className="round-arrow" onClick={() => toast.success(isSignedIn ? `เปิดบทเรียน “${lesson.title}” แล้ว` : "เข้าสู่ระบบเพื่อบันทึกความคืบหน้า")} aria-label={`เปิด ${lesson.title}`}><ArrowRight size={16} /></button></div>
                       </div>
                     </article>
                   );
@@ -277,17 +290,17 @@ function Home() {
               </section>
 
               <section className="homework-card">
-                <div className="homework-heading"><div><p className="eyebrow">วงจรการบ้าน</p><h2>ส่งงานให้ครูตรวจ</h2></div><span className="pending-count">๒ งาน</span></div>
-                <p>ถ่ายรูปคำแปลจากสมุดของคุณ แล้วรับคำแนะนำจากพระอาจารย์กลับไปใน LINE</p>
-                <div className="homework-item"><div className="homework-status homework-status--pending"><Upload size={16} /></div><div><strong>แบบฝึกหัดบทที่ ๐๓</strong><span>รอตรวจ · ส่งเมื่อวานนี้</span></div><ChevronRight size={16} /></div>
-                <button className="secondary-button" onClick={() => toast.success("เปิดพื้นที่อัปโหลดการบ้านแล้ว")}><Upload size={16} /> อัปโหลดการบ้าน</button>
+                <div className="homework-heading"><div><p className="eyebrow">วงจรการบ้าน</p><h2>{isSignedIn ? "ส่งงานให้ครูตรวจ" : "การบ้านของคุณ"}</h2></div>{isSignedIn && <span className="pending-count">{homeworkPending} งาน</span>}</div>
+                <p>{isSignedIn ? "ถ่ายรูปคำแปลจากสมุดของคุณ แล้วรับคำแนะนำจากพระอาจารย์" : "เข้าสู่ระบบเพื่อส่งงาน ติดตามสถานะ และดูคำแนะนำจากพระอาจารย์"}</p>
+                {isSignedIn && <div className="homework-item"><div className="homework-status homework-status--pending"><Upload size={16} /></div><div><strong>{homeworkPending ? "มีงานรอตรวจ" : "ยังไม่มีงานรอตรวจ"}</strong><span>{homeworkPending ? "ดูรายละเอียดในหน้าการบ้าน" : "เริ่มส่งงานบทแรกของคุณ"}</span></div><ChevronRight size={16} /></div>}
+                <button className="secondary-button" onClick={() => setLocation(isSignedIn ? "/homework" : "/login")}><Upload size={16} /> {isSignedIn ? "อัปโหลดการบ้าน" : "เข้าสู่ระบบ"}</button>
               </section>
             </aside>
           </div>
 
           <section className="weekly-card">
-            <div className="weekly-main"><div className="weekly-icon"><Trophy size={21} /></div><div><p className="eyebrow">ภารกิจประจำสัปดาห์</p><h2>เรียนให้ครบ ๓ บทก่อนวันพระ</h2><p>อีกเพียง ๑ บท คุณจะรักษาจังหวะการเรียนได้ต่อเนื่อง</p></div></div>
-            <div className="weekly-meter"><div className="meter-label"><span>ความคืบหน้า</span><strong>๒ / ๓ บท</strong></div><div className="meter-track"><div style={{ width: "66%" }} /></div></div>
+            <div className="weekly-main"><div className="weekly-icon"><Trophy size={21} /></div><div><p className="eyebrow">ภารกิจประจำสัปดาห์</p><h2>{isSignedIn ? "เรียนให้ครบ ๓ บทก่อนวันพระ" : "ตั้งเป้าหมายการเรียนของคุณ"}</h2><p>{isSignedIn ? "ความก้าวหน้านี้จะคำนวณจากบทเรียนที่คุณเรียนจริง" : "เข้าสู่ระบบเพื่อเริ่มบันทึกความคืบหน้าและเป้าหมายส่วนตัว"}</p></div></div>
+            {isSignedIn ? <div className="weekly-meter"><div className="meter-label"><span>ความคืบหน้า</span><strong>{completedLessons} / 3 บท</strong></div><div className="meter-track"><div style={{ width: `${Math.min(100, Math.round(completedLessons / 3 * 100))}%` }} /></div></div> : <button className="secondary-button" onClick={() => setLocation("/login")}>เข้าสู่ระบบเพื่อเริ่ม</button>}
             <button className="icon-button weekly-arrow" onClick={() => toast.info("เปิดรายละเอียดภารกิจประจำสัปดาห์")} aria-label="ดูรายละเอียดภารกิจ"><ArrowRight size={18} /></button>
           </section>
         </main>

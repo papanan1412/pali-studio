@@ -3,7 +3,7 @@ import { appRouter } from "./routers";
 import { normalizePali } from "./db";
 import type { TrpcContext } from "./_core/context";
 
-function contextFor(role: "user" | "teacher" | "admin" = "user"): TrpcContext {
+function contextFor(role: "user" | "teacher" | "admin" | "owner" = "user"): TrpcContext {
   return {
     user: {
       id: 9,
@@ -38,5 +38,12 @@ describe("teacher access control", () => {
   it("allows teacher role to reach the teacher procedure", async () => {
     const caller = appRouter.createCaller(contextFor("teacher"));
     await expect(caller.homework.forTeacher()).resolves.toEqual([]);
+  });
+
+  it("allows the owner role to reach teacher and admin procedures", async () => {
+    const caller = appRouter.createCaller(contextFor("owner"));
+    await expect(caller.homework.forTeacher()).resolves.toEqual([]);
+    const users = await caller.admin.users();
+    expect(users.some(user => user.role === "owner")).toBe(true);
   });
 });
