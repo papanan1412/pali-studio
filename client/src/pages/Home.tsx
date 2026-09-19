@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 type SectionKey = "overview" | "courses" | "homework" | "progress";
 
@@ -111,6 +112,7 @@ function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [paliWord, setPaliWord] = useState("พุทฺโธ");
+  const [, setLocation] = useLocation();
 
   const filteredLessons = useMemo(() => {
     const normalize = (value: string) => value.replace(/[ฺํ]/g, "").toLowerCase();
@@ -122,7 +124,8 @@ function Home() {
   const handleNav = (key: SectionKey) => {
     setActiveSection(key);
     setMobileMenuOpen(false);
-    if (key !== "overview") toast.info(`${navItems.find((item) => item.key === key)?.label}กำลังอยู่ในระยะเตรียมเปิดใช้งาน`);
+    const routes: Partial<Record<SectionKey, string>> = { courses: "/courses", homework: "/homework", progress: "/school" };
+    if (routes[key]) setLocation(routes[key]!);
   };
 
   const handlePlay = () => {
