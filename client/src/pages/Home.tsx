@@ -83,9 +83,10 @@ const navItems: { key: SectionKey; label: string; icon: LucideIcon }[] = [
 function PaliMark({ small = false }: { small?: boolean }) {
   return (
     <div className={`brand-mark ${small ? "brand-mark--small" : ""}`} aria-hidden="true">
-      <span>อ</span>
+      <span>ป</span>
       <span>า</span>
-      <span>ฬ</span>
+      <span>ล</span>
+      <span>ี</span>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { and, count, desc, eq, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { createHash } from "node:crypto";
 import { ENV } from "./_core/env";
 import {
   courses,
@@ -56,6 +57,31 @@ export async function getUserByOpenId(openId: string) {
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
+}
+
+export function localOpenId(email: string) {
+  return `local_${createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 56)}`;
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).limit(1);
+  return result[0];
+}
+
+export async function createLocalUser(input: { name: string; email: string; passwordHash: string }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const existing = await db.select({ id: users.id }).from(users).limit(1);
+  const [created] = await db.insert(users).values({ openId: localOpenId(input.email), name: input.name.trim(), email: input.email.trim().toLowerCase(), passwordHash: input.passwordHash, loginMethod: "email", role: existing.length === 0 ? "admin" : "user" }).$returningId();
+  return created?.id;
+}
+
+export async function setLocalPassword(email: string, passwordHash: string, name: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ passwordHash, name: name.trim(), loginMethod: "email" }).where(eq(users.email, email.trim().toLowerCase()));
 }
 
 const seedCourses = [
@@ -189,4 +215,22 @@ export async function getTeacherDashboard() {
   const pendingHomework = await db.select({ total: count() }).from(homeworkSubmissions).where(eq(homeworkSubmissions.status, "pending"));
   const gradedThisWeek = await db.select({ total: count() }).from(homeworkSubmissions).where(eq(homeworkSubmissions.status, "graded"));
   return { students: Number(students[0]?.total ?? 0), pendingHomework: Number(pendingHomework[0]?.total ?? 0), gradedThisWeek: Number(gradedThisWeek[0]?.total ?? 0), averageScore: 0 };
+}
+
+export async function listUsersForAdmin() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: users.id, name: users.name, email: users.email, monasteryName: users.monasteryName, role: users.role, lastSignedIn: users.lastSignedIn }).from(users).orderBy(desc(users.lastSignedIn));
+}
+
+export async function updateUserRole(userId: number, role: "user" | "teacher" | "admin") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}
+
+export async function updateLessonMedia(id: number, videoUrl?: string | null, pdfUrl?: string | null) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(lessons).set({ videoUrl: videoUrl || null, pdfUrl: pdfUrl || null }).where(eq(lessons.id, id));
 }

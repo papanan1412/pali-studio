@@ -5,6 +5,7 @@ export const users = mysqlTable("users", {
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
+  passwordHash: varchar("passwordHash", { length: 220 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   monasteryName: varchar("monasteryName", { length: 160 }),
   role: mysqlEnum("role", ["user", "teacher", "admin"]).default("user").notNull(),

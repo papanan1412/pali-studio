@@ -1,4 +1,3 @@
-import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ArrowLeft, BookOpen, BookOpenCheck, GraduationCap, Library, LogIn, UserRound } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -9,10 +8,12 @@ const links = [
   { href: "/homework", label: "การบ้าน", icon: BookOpenCheck },
   { href: "/dictionary", label: "พจนานุกรม", icon: Library },
   { href: "/school", label: "สำนักเรียน", icon: GraduationCap },
+  { href: "/teacher", label: "ตรวจการบ้าน", icon: BookOpenCheck },
+  { href: "/media", label: "จัดการสื่อ", icon: Library },
 ];
 
 function Mark() {
-  return <div className="brand-mark brand-mark--small"><span>อ</span><span>า</span><span>ฬ</span></div>;
+  return <div className="brand-mark brand-mark--small"><span>ป</span><span>า</span><span>ล</span><span>ี</span></div>;
 }
 
 export function StudioPageFrame({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
@@ -33,7 +34,7 @@ export function StudioPageFrame({ title, eyebrow, children }: { title: string; e
         <div className="feature-sidebar-note"><strong>ออกแบบเพื่อการเรียนจริง</strong><span>รองรับพินทุ นิคหิต และวงจรการบ้านครบในที่เดียว</span></div>
       </aside>
       <main className="feature-main">
-        <header className="feature-topbar"><Link href="/" className="back-link"><ArrowLeft size={16} /> กลับภาพรวม</Link><div className="feature-actions">{user ? <Link href="/profile" className="profile-chip"><UserRound size={15} /> โปรไฟล์</Link> : <button className="login-chip" onClick={() => startLogin()}><LogIn size={15} /> เข้าสู่ระบบ</button>}</div></header>
+        <header className="feature-topbar"><Link href="/" className="back-link"><ArrowLeft size={16} /> กลับภาพรวม</Link><div className="feature-actions">{user ? <Link href="/profile" className="profile-chip"><UserRound size={15} /> โปรไฟล์</Link> : <Link href="/login" className="login-chip"><LogIn size={15} /> เข้าสู่ระบบ</Link>}</div></header>
         <div className="feature-content"><p className="eyebrow eyebrow--warm">{eyebrow}</p><h1>{title}</h1>{children}</div>
       </main>
     </div>
