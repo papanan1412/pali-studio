@@ -1,0 +1,25 @@
+import { BookOpen, Edit3, Eye, EyeOff, Plus, Save, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { StudioPageFrame } from "@/components/StudioPageFrame";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
+
+export default function CourseManagerPage() {
+  const { user } = useAuth();
+  const courses = trpc.courses.list.useQuery({});
+  const [courseTitle, setCourseTitle] = useState("");
+  const [courseCode, setCourseCode] = useState("");
+  const [level, setLevel] = useState("");
+  const [activeCourse, setActiveCourse] = useState<number | null>(null);
+  const [lessonTitle, setLessonTitle] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [pdfUrl, setPdfUrl] = useState("");
+  const createCourse = trpc.courses.create.useMutation({ onSuccess: () => { toast.success("สร้างคอร์สแล้ว"); courses.refetch(); setCourseTitle(""); setCourseCode(""); setLevel(""); }, onError: e => toast.error(e.message) });
+  const createLesson = trpc.courses.createLesson.useMutation({ onSuccess: () => { toast.success("เพิ่มบทเรียนแล้ว"); courses.refetch(); setLessonTitle(""); setVideoUrl(""); setPdfUrl(""); }, onError: e => toast.error(e.message) });
+  const updateCourse = trpc.courses.update.useMutation({ onSuccess: () => { toast.success("อัปเดตสถานะคอร์สแล้ว"); courses.refetch(); } });
+  const deleteLesson = trpc.courses.deleteLesson.useMutation({ onSuccess: () => { toast.success("ลบบทเรียนแล้ว"); courses.refetch(); } });
+  const canManage = user?.role === "owner" || user?.role === "admin";
+  if (!canManage) return <StudioPageFrame title="จัดการคอร์ส" eyebrow="พื้นที่สำหรับผู้ดูแลหลัก"><div className="auth-banner auth-banner--soft"><BookOpen size={20} /><div><strong>เฉพาะผู้ดูแลหลัก</strong><span>ครูสามารถดูแลการเรียนและตรวจงาน แต่การสร้าง/ลบบัญชีและคอร์สต้องทำโดยผู้ดูแลหลัก</span></div></div></StudioPageFrame>;
+  return <StudioPageFrame title="จัดการคอร์สและบทเรียน" eyebrow="สร้าง แก้ไข เผยแพร่ และจัดลำดับเนื้อหา"><div className="manager-grid"><section className="profile-card"><div className="panel-heading"><div><h2>สร้างคอร์สใหม่</h2><p>กำหนดหลักสูตรก่อนเพิ่มบทเรียน</p></div><Plus size={20} /></div><label className="profile-field"><span>รหัสคอร์ส</span><input value={courseCode} onChange={e => setCourseCode(e.target.value)} placeholder="เช่น PALI-101" /></label><label className="profile-field"><span>ชื่อคอร์ส</span><input value={courseTitle} onChange={e => setCourseTitle(e.target.value)} placeholder="บาลีพื้นฐาน" /></label><label className="profile-field"><span>ระดับ</span><input value={level} onChange={e => setLevel(e.target.value)} placeholder="ประโยค ๑–๒" /></label><button className="primary-button" onClick={() => createCourse.mutate({ code: courseCode, title: courseTitle, paliLevel: level })} disabled={!courseCode || !courseTitle || !level}><Plus size={16} /> สร้างคอร์ส</button></section><section className="profile-card"><div className="panel-heading"><div><h2>เพิ่มบทเรียน</h2><p>ใส่ลิงก์วิดีโอและ PDF ได้ทันที</p></div><Edit3 size={20} /></div><label className="profile-field"><span>คอร์ส</span><select value={activeCourse ?? ""} onChange={e => setActiveCourse(Number(e.target.value))}><option value="">เลือกคอร์ส</option>{(courses.data || []).map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select></label><label className="profile-field"><span>ชื่อบทเรียน</span><input value={lessonTitle} onChange={e => setLessonTitle(e.target.value)} placeholder="บทที่ ๑" /></label><label className="profile-field"><span>URL วิดีโอ</span><input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://..." /></label><label className="profile-field"><span>URL PDF</span><input value={pdfUrl} onChange={e => setPdfUrl(e.target.value)} placeholder="https://..." /></label><button className="primary-button" onClick={() => activeCourse && createLesson.mutate({ courseId: activeCourse, title: lessonTitle, videoUrl, pdfUrl })} disabled={!activeCourse || !lessonTitle}><Save size={16} /> บันทึกบทเรียน</button></section></div><div className="manager-list">{(courses.data || []).map(course => <section className="profile-card" key={course.id}><div className="panel-heading"><div><p className="eyebrow">{course.code} · {course.paliLevel}</p><h2>{course.title}</h2></div><button className="icon-button" onClick={() => updateCourse.mutate({ id: course.id, isActive: !course.isActive })}>{course.isActive ? <Eye size={17} /> : <EyeOff size={17} />}</button></div><div className="lesson-admin-list">{course.lessons.map(lesson => <div className="lesson-admin-row" key={lesson.id}><div><strong>{lesson.title}</strong><span>{lesson.videoUrl ? "มีวิดีโอ" : "ยังไม่มีวิดีโอ"} · {lesson.pdfUrl ? "มี PDF" : "ยังไม่มี PDF"}</span></div><button className="danger-icon" onClick={() => { if (window.confirm("ลบบทเรียนนี้หรือไม่")) deleteLesson.mutate({ id: lesson.id }); }}><Trash2 size={15} /></button></div>)}</div></section>)}</div></StudioPageFrame>;
+}

@@ -118,6 +118,7 @@ function Home() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const summary = trpc.dashboard.summary.useQuery(undefined, { enabled: Boolean(user), retry: false });
+  const notifications = trpc.notifications.mine.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const isSignedIn = Boolean(user);
   const displayName = user?.name?.trim() || "ผู้เรียน";
   const initials = displayName.slice(0, 2);
@@ -212,9 +213,9 @@ function Home() {
             <kbd>⌘ K</kbd>
           </div>
           <div className="top-actions">
-            <button className="icon-button notification-button" onClick={() => toast.info("ยังไม่มีการแจ้งเตือนใหม่")} aria-label="การแจ้งเตือน">
+            <button className="icon-button notification-button" onClick={() => toast.info(notifications.data?.filter(item => !item.readAt).length ? `มี ${notifications.data?.filter(item => !item.readAt).length} การแจ้งเตือนใหม่` : "ยังไม่มีการแจ้งเตือนใหม่")} aria-label="การแจ้งเตือน">
               <Bell size={19} />
-              <span />
+              {notifications.data?.some(item => !item.readAt) && <span />}
             </button>
             <div className="top-divider" />
             <button className="profile-button" onClick={() => setLocation(isSignedIn ? "/profile" : "/login")}>
@@ -286,7 +287,7 @@ function Home() {
               <section className="word-card">
                 <div className="word-card-top"><div><p className="eyebrow">บาลีวันนี้</p><h2>แตะเพื่อฟังเสียง</h2></div><button className="sound-button" onClick={() => toast.success(`กำลังอ่านออกเสียง “${paliWord}”`)} aria-label="ฟังเสียงคำบาลี"><Volume2 size={19} /></button></div>
                 <button className="word-display" onClick={() => setPaliWord(paliWord === "พุทฺโธ" ? "ธมฺโม" : "พุทฺโธ")}><span>{paliWord}</span><small>{paliWord === "พุทฺโธ" ? "ผู้รู้ ผู้ตื่น ผู้เบิกบาน" : "ธรรมะ คำสอนของพระพุทธเจ้า"}</small></button>
-                <div className="word-divider" /><div className="word-note"><Sparkles size={15} /><span>กดที่คำบาลีเพื่อสลับคำศัพท์</span></div>
+                <div className="word-divider" /><div className="word-note"><Sparkles size={15} /><span>กดที่คำบาลีเพื่อสลับคำศัพท์</span></div><div className="word-links"><button onClick={() => setLocation("/dictionary")}>เปิดพจนานุกรม</button><button onClick={() => setLocation("/vocabulary")}>ฝึกจำศัพท์</button><button onClick={() => setLocation("/voice")}>ฝึกเสียงอ่าน</button></div>
               </section>
 
               <section className="homework-card">

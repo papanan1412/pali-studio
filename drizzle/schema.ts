@@ -9,6 +9,9 @@ export const users = mysqlTable("users", {
   passwordHash: varchar("passwordHash", { length: 220 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   monasteryName: varchar("monasteryName", { length: 160 }),
+  avatarUrl: text("avatarUrl"),
+  emailVerifiedAt: timestamp("emailVerifiedAt"),
+  phoneVerifiedAt: timestamp("phoneVerifiedAt"),
   role: mysqlEnum("role", ["user", "teacher", "admin", "owner"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -73,7 +76,92 @@ export const dictionaryEntries = mysqlTable("dictionaryEntries", {
   meaning: text("meaning").notNull(),
   grammarNote: varchar("grammarNote", { length: 240 }),
   example: text("example"),
+  rootWord: varchar("rootWord", { length: 180 }),
+  audioUrl: text("audioUrl"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const verificationCodes = mysqlTable("verificationCodes", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  channel: mysqlEnum("channel", ["email", "phone"]).notNull(),
+  target: varchar("target", { length: 320 }).notNull(),
+  codeHash: varchar("codeHash", { length: 128 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const passwordResetTokens = mysqlTable("passwordResetTokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  tokenHash: varchar("tokenHash", { length: 128 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const loginDevices = mysqlTable("loginDevices", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  deviceName: varchar("deviceName", { length: 160 }).notNull(),
+  userAgent: text("userAgent"),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const lessonQuizzes = mysqlTable("lessonQuizzes", {
+  id: int("id").autoincrement().primaryKey(),
+  lessonId: int("lessonId").notNull().references(() => lessons.id),
+  question: text("question").notNull(),
+  choicesJson: text("choicesJson").notNull(),
+  answerIndex: int("answerIndex").notNull(),
+  explanation: text("explanation"),
+});
+
+export const quizAttempts = mysqlTable("quizAttempts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  lessonId: int("lessonId").notNull().references(() => lessons.id),
+  score: int("score").notNull(),
+  total: int("total").notNull(),
+  answersJson: text("answersJson"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const dictionaryFavorites = mysqlTable("dictionaryFavorites", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  entryId: int("entryId").notNull().references(() => dictionaryEntries.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const vocabularyReviews = mysqlTable("vocabularyReviews", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  entryId: int("entryId").notNull().references(() => dictionaryEntries.id),
+  ease: int("ease").default(2).notNull(),
+  streak: int("streak").default(0).notNull(),
+  nextReviewAt: timestamp("nextReviewAt").defaultNow().notNull(),
+  lastReviewedAt: timestamp("lastReviewedAt"),
+});
+
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  type: varchar("type", { length: 48 }).notNull(),
+  title: varchar("title", { length: 220 }).notNull(),
+  body: text("body"),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const certificates = mysqlTable("certificates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  courseId: int("courseId").notNull().references(() => courses.id),
+  certificateNo: varchar("certificateNo", { length: 80 }).notNull().unique(),
+  issuedAt: timestamp("issuedAt").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;

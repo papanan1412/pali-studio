@@ -55,3 +55,17 @@ describe("phone identifier normalization", () => {
     expect(normalizePhone("66812345678")).toBe("0812345678");
   });
 });
+
+describe("account safety", () => {
+  it("does not expose password hashes through auth.me", async () => {
+    const caller = appRouter.createCaller(contextFor("user"));
+    const user = await caller.auth.me();
+    expect(user).not.toHaveProperty("passwordHash");
+    expect(user?.name).toBe("ผู้ทดสอบ");
+  });
+
+  it("keeps student access away from admin course management", async () => {
+    const caller = appRouter.createCaller(contextFor("user"));
+    await expect(caller.courses.create({ code: "TEST", title: "ทดสอบ", paliLevel: "พื้นฐาน" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});

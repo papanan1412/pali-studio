@@ -1,0 +1,22 @@
+import { KeyRound, Laptop, LogOut, MailCheck, Phone, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { StudioPageFrame } from "@/components/StudioPageFrame";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+
+export default function SecurityPage() {
+  const { user, logout } = useAuth();
+  const [code, setCode] = useState("");
+  const [channel, setChannel] = useState<"email" | "phone">("email");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const sendCode = trpc.auth.requestVerification.useMutation({ onSuccess: data => toast.success(data.message), onError: e => toast.error(e.message) });
+  const verify = trpc.auth.verify.useMutation({ onSuccess: () => toast.success("ยืนยันตัวตนสำเร็จ"), onError: e => toast.error(e.message) });
+  const changePassword = trpc.profile.changePassword.useMutation({ onSuccess: () => { toast.success("เปลี่ยนรหัสผ่านแล้ว"); setCurrentPassword(""); setNewPassword(""); }, onError: e => toast.error(e.message) });
+  const devices = trpc.profile.devices.useQuery(undefined, { enabled: Boolean(user) });
+  const doLogout = async () => { await logout(); window.location.href = "/"; };
+  if (!user) return <StudioPageFrame title="ความปลอดภัย" eyebrow="บัญชีและการเข้าสู่ระบบ"><div className="auth-banner"><ShieldCheck size={20} /><div><strong>เข้าสู่ระบบเพื่อจัดการความปลอดภัย</strong><span>ตรวจสอบอุปกรณ์ เปลี่ยนรหัสผ่าน และยืนยันข้อมูลติดต่อ</span></div><button onClick={() => { window.location.href = "/login"; }}>เข้าสู่ระบบ</button></div></StudioPageFrame>;
+  const target = channel === "email" ? user.email : user.phone;
+  return <StudioPageFrame title="ความปลอดภัยของบัญชี" eyebrow="ยืนยันตัวตนและควบคุมการเข้าถึง"><div className="security-grid"><section className="profile-card"><div className="profile-card-header"><div className="profile-side-icon"><ShieldCheck size={20} /></div><div><h2>ยืนยันข้อมูลติดต่อ</h2><span>ช่วยปกป้องบัญชีและใช้กู้รหัสผ่าน</span></div></div><div className="verification-choice"><button className={channel === "email" ? "active" : ""} onClick={() => setChannel("email")} disabled={!user.email}><MailCheck size={17} /> อีเมล <small>{user.email || "ยังไม่มี"}</small></button><button className={channel === "phone" ? "active" : ""} onClick={() => setChannel("phone")} disabled={!user.phone}><Phone size={17} /> โทรศัพท์ <small>{user.phone || "ยังไม่มี"}</small></button></div><div className="inline-form"><input inputMode="numeric" maxLength={6} value={code} onChange={e => setCode(e.target.value)} placeholder="รหัส 6 หลัก" /><button className="secondary-button" onClick={() => target && sendCode.mutate({ channel })} disabled={!target || sendCode.isPending}>ขอรหัส</button><button className="primary-button" onClick={() => verify.mutate({ channel, code })} disabled={code.length !== 6 || verify.isPending}>ยืนยัน</button></div><p className="muted-note">ช่องทางส่งอีเมล/SMS จะใช้ provider ของสำนักเรียนเมื่อเชื่อมต่อระบบแจ้งเตือน</p></section><section className="profile-card"><div className="profile-card-header"><div className="profile-side-icon"><KeyRound size={20} /></div><div><h2>เปลี่ยนรหัสผ่าน</h2><span>ใช้รหัสผ่านอย่างน้อย 8 ตัวอักษร</span></div></div><label className="profile-field"><span>รหัสผ่านเดิม</span><input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label><label className="profile-field"><span>รหัสผ่านใหม่</span><input type="password" minLength={8} value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label><button className="primary-button" onClick={() => changePassword.mutate({ currentPassword, newPassword })} disabled={currentPassword.length < 8 || newPassword.length < 8}><KeyRound size={16} /> เปลี่ยนรหัสผ่าน</button></section><section className="profile-card"><div className="profile-card-header"><div className="profile-side-icon"><Laptop size={20} /></div><div><h2>อุปกรณ์ที่เข้าสู่ระบบ</h2><span>ระบบบันทึกอุปกรณ์ล่าสุดเพื่อแจ้งเตือนความผิดปกติ</span></div></div>{devices.data?.length ? devices.data.map(device => <div className="device-row" key={device.id}><Laptop size={16} /><div><strong>{device.deviceName}</strong><span>ใช้งานล่าสุด {new Date(device.lastSeenAt).toLocaleString("th-TH")}</span></div></div>) : <p className="muted-note">ยังไม่มีประวัติอุปกรณ์</p>}<button className="danger-button" onClick={doLogout}><LogOut size={16} /> ออกจากระบบ</button></section></div></StudioPageFrame>;
+}

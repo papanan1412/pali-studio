@@ -1,15 +1,24 @@
-import { and, count, desc, eq, like, or } from "drizzle-orm";
+import { and, count, desc, eq, like, lt, or, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { ENV } from "./_core/env";
 import {
   courses,
+  certificates,
   dictionaryEntries,
+  dictionaryFavorites,
   homeworkSubmissions,
+  lessonQuizzes,
   lessonProgress,
   lessons,
+  loginDevices,
+  notifications,
+  passwordResetTokens,
+  quizAttempts,
   type InsertUser,
   users,
+  verificationCodes,
+  vocabularyReviews,
 } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -132,6 +141,12 @@ const seedDictionary = [
   { displayText: "มโน", searchIndex: "มโน", meaning: "ใจ; จิต; ความคิด", grammarNote: "นามศัพท์ นปุงสกลิงค์", example: "มโนปุพฺพงฺคมา ธมฺมา" },
 ];
 
+const seedQuizTemplates = [
+  { lessonTitle: "พุทฺโธ ธมฺโม สงฺโฆ", question: "พุทฺธํ สรณํ คจฺฉามิ มีความหมายว่าอย่างไร", choices: ["ข้าพเจ้าถึงพระพุทธเจ้าเป็นสรณะ", "ข้าพเจ้าถึงพระสงฆ์เป็นสรณะ", "ข้าพเจ้าถึงธรรมเป็นสรณะ"], answerIndex: 0, explanation: "พุทฺธํ คือ พระพุทธเจ้า" },
+  { lessonTitle: "ตสฺมาติห — เพราะฉะนั้นแล", question: "ตสฺมา แปลว่าอะไร", choices: ["เมื่อวานนี้", "เพราะเหตุนั้น", "ที่ไหน"], answerIndex: 1, explanation: "ตสฺมา เป็นนิบาตบอกเหตุผล" },
+  { lessonTitle: "นามศัพท์และวิภัตติ", question: "ปฐมาวิภัตติทำหน้าที่ใดโดยทั่วไป", choices: ["ประธาน", "กรรม", "เครื่องมือ"], answerIndex: 0, explanation: "ปฐมาวิภัตติมักทำหน้าที่เป็นประธาน" },
+];
+
 export function normalizePali(value: string) {
   return value.replace(/[ฺํ]/g, "").normalize("NFC").toLowerCase().trim();
 }
@@ -149,6 +164,15 @@ export async function ensureCatalogSeed() {
   }
   const existingDictionary = await db.select({ total: count() }).from(dictionaryEntries);
   if (Number(existingDictionary[0]?.total ?? 0) === 0) await db.insert(dictionaryEntries).values(seedDictionary);
+  const existingQuizzes = await db.select({ total: count() }).from(lessonQuizzes);
+  if (Number(existingQuizzes[0]?.total ?? 0) === 0) {
+    const dbLessons = await db.select({ id: lessons.id, title: lessons.title }).from(lessons);
+    const quizRows = seedQuizTemplates.flatMap(template => {
+      const lesson = dbLessons.find(item => item.title === template.lessonTitle);
+      return lesson ? [{ lessonId: lesson.id, question: template.question, choicesJson: JSON.stringify(template.choices), answerIndex: template.answerIndex, explanation: template.explanation }] : [];
+    });
+    if (quizRows.length) await db.insert(lessonQuizzes).values(quizRows);
+  }
 }
 
 export async function listCourses(search?: string) {
@@ -262,4 +286,203 @@ export async function updateLessonMedia(id: number, videoUrl?: string | null, pd
   const db = await getDb();
   if (!db) return;
   await db.update(lessons).set({ videoUrl: videoUrl || null, pdfUrl: pdfUrl || null }).where(eq(lessons.id, id));
+}
+
+
+function hashSecurityValue(value: string) {
+  return createHash("sha256").update(`${ENV.cookieSecret}:${value}`).digest("hex");
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateUserProfile(userId: number, input: { name: string; email?: string | null; phone?: string | null; monasteryName?: string | null; avatarUrl?: string | null }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ name: input.name.trim(), email: input.email?.trim().toLowerCase() || null, phone: input.phone ? normalizePhone(input.phone) : null, monasteryName: input.monasteryName || null, avatarUrl: input.avatarUrl || null }).where(eq(users.id, userId));
+}
+
+export async function updateUserPassword(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+}
+
+export async function createVerificationCode(userId: number, channel: "email" | "phone", target: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await db.insert(verificationCodes).values({ userId, channel, target, codeHash: hashSecurityValue(code), expiresAt: new Date(Date.now() + 10 * 60_000) });
+  return code;
+}
+
+export async function verifyCode(userId: number, channel: "email" | "phone", code: string) {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.select().from(verificationCodes).where(and(eq(verificationCodes.userId, userId), eq(verificationCodes.channel, channel), isNull(verificationCodes.usedAt))).orderBy(desc(verificationCodes.createdAt)).limit(1);
+  const row = rows[0];
+  if (!row || row.expiresAt.getTime() < Date.now() || row.codeHash !== hashSecurityValue(code)) return false;
+  await db.update(verificationCodes).set({ usedAt: new Date() }).where(eq(verificationCodes.id, row.id));
+  await db.update(users).set(channel === "email" ? { emailVerifiedAt: new Date() } : { phoneVerifiedAt: new Date() }).where(eq(users.id, userId));
+  return true;
+}
+
+export async function createPasswordResetToken(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const token = randomBytes(32).toString("hex");
+  await db.insert(passwordResetTokens).values({ userId, tokenHash: hashSecurityValue(token), expiresAt: new Date(Date.now() + 30 * 60_000) });
+  return token;
+}
+
+export async function consumePasswordResetToken(token: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(passwordResetTokens).where(and(eq(passwordResetTokens.tokenHash, hashSecurityValue(token)), isNull(passwordResetTokens.usedAt))).limit(1);
+  const row = rows[0];
+  if (!row || row.expiresAt.getTime() < Date.now()) return undefined;
+  await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, row.id));
+  return row.userId;
+}
+
+export async function registerLoginDevice(userId: number, deviceName: string, userAgent?: string) {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(loginDevices).where(and(eq(loginDevices.userId, userId), eq(loginDevices.deviceName, deviceName))).limit(1);
+  if (existing[0]) await db.update(loginDevices).set({ userAgent, lastSeenAt: new Date() }).where(eq(loginDevices.id, existing[0].id));
+  else await db.insert(loginDevices).values({ userId, deviceName, userAgent });
+}
+
+export async function listLoginDevices(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: loginDevices.id, deviceName: loginDevices.deviceName, lastSeenAt: loginDevices.lastSeenAt, createdAt: loginDevices.createdAt }).from(loginDevices).where(eq(loginDevices.userId, userId)).orderBy(desc(loginDevices.lastSeenAt));
+}
+
+export async function listNotifications(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt)).limit(30);
+}
+
+export async function markNotificationRead(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+}
+
+export async function notifyUser(userId: number, type: string, title: string, body?: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(notifications).values({ userId, type, title, body });
+}
+
+export async function listLessonQuizzes(lessonId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(lessonQuizzes).where(eq(lessonQuizzes.lessonId, lessonId));
+  return rows.map(row => ({ ...row, choices: JSON.parse(row.choicesJson) as string[] }));
+}
+
+export async function submitQuiz(userId: number, lessonId: number, answers: number[]) {
+  const db = await getDb();
+  if (!db) return { score: 0, total: 0, passed: false };
+  const questions = await db.select().from(lessonQuizzes).where(eq(lessonQuizzes.lessonId, lessonId));
+  const score = questions.reduce((total, question, index) => total + (answers[index] === question.answerIndex ? 1 : 0), 0);
+  await db.insert(quizAttempts).values({ userId, lessonId, score, total: questions.length, answersJson: JSON.stringify(answers) });
+  if (score === questions.length && questions.length > 0) await saveProgress(userId, lessonId, 100, 0);
+  return { score, total: questions.length, passed: questions.length > 0 && score / questions.length >= 0.7 };
+}
+
+export async function toggleDictionaryFavorite(userId: number, entryId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const existing = await db.select().from(dictionaryFavorites).where(and(eq(dictionaryFavorites.userId, userId), eq(dictionaryFavorites.entryId, entryId))).limit(1);
+  if (existing[0]) { await db.delete(dictionaryFavorites).where(eq(dictionaryFavorites.id, existing[0].id)); return false; }
+  await db.insert(dictionaryFavorites).values({ userId, entryId });
+  return true;
+}
+
+export async function listDictionaryFavorites(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ favorite: dictionaryFavorites, entry: dictionaryEntries }).from(dictionaryFavorites).innerJoin(dictionaryEntries, eq(dictionaryFavorites.entryId, dictionaryEntries.id)).where(eq(dictionaryFavorites.userId, userId)).orderBy(desc(dictionaryFavorites.createdAt));
+}
+
+export async function reviewVocabulary(userId: number, entryId: number, remembered: boolean) {
+  const db = await getDb();
+  if (!db) return { streak: 0, nextReviewAt: new Date() };
+  const existing = await db.select().from(vocabularyReviews).where(and(eq(vocabularyReviews.userId, userId), eq(vocabularyReviews.entryId, entryId))).limit(1);
+  const streak = Math.max(0, (existing[0]?.streak ?? 0) + (remembered ? 1 : -1));
+  const days = remembered ? Math.min(30, Math.max(1, streak)) : 1;
+  const nextReviewAt = new Date(Date.now() + days * 86_400_000);
+  if (existing[0]) await db.update(vocabularyReviews).set({ streak, nextReviewAt, lastReviewedAt: new Date() }).where(eq(vocabularyReviews.id, existing[0].id));
+  else await db.insert(vocabularyReviews).values({ userId, entryId, streak, nextReviewAt, lastReviewedAt: new Date() });
+  return { streak, nextReviewAt };
+}
+
+export async function getVocabularyStats(userId: number) {
+  const db = await getDb();
+  if (!db) return { due: 0, streak: 0, reviewed: 0 };
+  const rows = await db.select().from(vocabularyReviews).where(eq(vocabularyReviews.userId, userId));
+  return { due: rows.filter(row => row.nextReviewAt.getTime() <= Date.now()).length, streak: rows.reduce((max, row) => Math.max(max, row.streak), 0), reviewed: rows.length };
+}
+
+export async function issueCertificate(userId: number, courseId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const existing = await db.select().from(certificates).where(and(eq(certificates.userId, userId), eq(certificates.courseId, courseId))).limit(1);
+  if (existing[0]) return existing[0];
+  const certificateNo = `PALI-${new Date().getFullYear()}-${randomBytes(4).toString("hex").toUpperCase()}`;
+  await db.insert(certificates).values({ userId, courseId, certificateNo });
+  const created = await db.select().from(certificates).where(eq(certificates.certificateNo, certificateNo)).limit(1);
+  return created[0];
+}
+
+export async function listCertificates(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ certificate: certificates, course: courses }).from(certificates).innerJoin(courses, eq(certificates.courseId, courses.id)).where(eq(certificates.userId, userId)).orderBy(desc(certificates.issuedAt));
+}
+
+export async function createCourse(input: { code: string; title: string; paliLevel: string; description?: string; orderIndex?: number }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.insert(courses).values({ ...input, orderIndex: input.orderIndex ?? 0 });
+  return Number(result[0].insertId);
+}
+
+export async function updateCourse(id: number, input: { title?: string; paliLevel?: string; description?: string; isActive?: boolean; orderIndex?: number }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(courses).set(input).where(eq(courses.id, id));
+}
+
+export async function deleteLesson(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(lessons).where(eq(lessons.id, id));
+}
+
+export async function createLesson(input: { courseId: number; title: string; subtitle?: string; videoUrl?: string; pdfUrl?: string; paliRawText?: string; durationMinutes?: number; orderIndex?: number }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.insert(lessons).values({ ...input, durationMinutes: input.durationMinutes ?? 20, orderIndex: input.orderIndex ?? 0 });
+  return Number(result[0].insertId);
+}
+
+export async function updateLesson(id: number, input: { title?: string; subtitle?: string; videoUrl?: string | null; pdfUrl?: string | null; paliRawText?: string; durationMinutes?: number; orderIndex?: number; isPublished?: boolean }) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(lessons).set(input).where(eq(lessons.id, id));
+}
+
+export async function getStudentRoster() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: users.id, name: users.name, email: users.email, phone: users.phone, lastSignedIn: users.lastSignedIn, role: users.role }).from(users).where(eq(users.role, "user")).orderBy(desc(users.lastSignedIn));
 }
